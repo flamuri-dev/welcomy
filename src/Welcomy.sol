@@ -9,8 +9,6 @@ import "./BokkyPooBahsDateTimeLibrary.sol";
 contract Welcomy is ERC721URIStorage {
     struct Apartment {
         uint256 pricePerNight; // in wei
-        bytes12 latitude;
-        bytes12 longitude;
         address owner;
     }
 
@@ -22,9 +20,14 @@ contract Welcomy is ERC721URIStorage {
         public apartmentUnavailableDates;
     mapping(address => uint256) public unclaimedEth;
 
-    event NewApartment(uint256 apartmentId);
+    event NewApartment(
+        address indexed owner,
+        uint256 id,
+        bytes16 latitude,
+        bytes16 longitude
+    );
 
-    event NewReservation(address owner, uint256 reservationId);
+    event NewReservation(address indexed owner, uint256 id);
 
     event NewRating(uint256 reservationId, uint8 rating, string message);
 
@@ -39,15 +42,15 @@ contract Welcomy is ERC721URIStorage {
     constructor() ERC721("Welcomy", "WELC") {}
 
     function listApartment(
-        bytes12 _latitude,
-        bytes12 _longitude,
+        bytes16 _latitude,
+        bytes16 _longitude,
         uint256 _pricePerNight
     ) external {
         apartments.push(
-            Apartment(_pricePerNight, _latitude, _longitude, msg.sender)
+            Apartment(_pricePerNight, msg.sender)
         );
 
-        emit NewApartment(apartments.length - 1);
+        emit NewApartment(msg.sender, apartments.length - 1, _latitude, _longitude);
     }
 
     function changeApartmentOwnership(
@@ -74,6 +77,19 @@ contract Welcomy is ERC721URIStorage {
         uint16 _yearEnd
     ) external payable {
         require(_apartmentId < apartments.length, "Invalid apartment");
+        require(
+            BokkyPooBahsDateTimeLibrary.isValidDate(
+                _yearStart,
+                _monthStart,
+                _dayStart
+            ) &&
+                BokkyPooBahsDateTimeLibrary.isValidDate(
+                    _yearEnd,
+                    _monthEnd,
+                    _dayEnd
+                ),
+            "Invalid date"
+        );
 
         uint256 start = BokkyPooBahsDateTimeLibrary.timestampFromDate(
             _yearStart,
@@ -89,7 +105,7 @@ contract Welcomy is ERC721URIStorage {
 
         require(
             start >= formatDate(block.timestamp) && end > start,
-            "Invalid date"
+            "Dates are incorrect"
         );
 
         uint256 daysCount = (end - start) / 60 / 60 / 24;
@@ -141,7 +157,7 @@ contract Welcomy is ERC721URIStorage {
         emit NewRating(_reservationId, _rating, _message);
     }
 
-    function withdrawMoney(uint256 _amount) public {
+    function withdraw(uint256 _amount) public {
         require(unclaimedEth[msg.sender] >= _amount, "Invalid amount");
         unclaimedEth[msg.sender] -= _amount;
         (bool sent, ) = msg.sender.call{value: _amount}("");
